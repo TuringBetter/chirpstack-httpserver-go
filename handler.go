@@ -28,7 +28,7 @@ func NewHandler(cs *services.ChirpStackClient, ss *services.StatusServerClient) 
 // RegisterRoutes 注册所有 API 路由
 func (h *Handler) RegisterRoutes(router *gin.Engine) {
 	// ChirpStack 事件回调
-	router.POST("/", h.handleChirpStackEvent)
+	router.POST("/integration/uplink", h.handleChirpStackEvent)
 
 	// 外部 API
 	apiGroup := router.Group("/api")
