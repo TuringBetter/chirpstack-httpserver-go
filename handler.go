@@ -44,7 +44,7 @@ func handleTimeSync(h *Handler, devEUI string, data []byte) error {
 	binary.BigEndian.PutUint32(timeBytes, msSinceMidnight)
 
 	// 【5】 构建最终的下行数据包：命令码 + 时间数据
-	payload := append([]byte{0x06}, timeBytes...)
+	payload := timeBytes
 
 	// 【6】 日志
 	log.Info().
@@ -54,7 +54,7 @@ func handleTimeSync(h *Handler, devEUI string, data []byte) error {
 		Hex("payload", payload). // 以十六进制格式记录最终的数据包
 		Msg("准备发送时间同步下行数据")
 
-	downlinkID, err := h.csClient.SendDownlink(devEUI, 1, false, payload)
+	downlinkID, err := h.csClient.SendDownlink(devEUI, 9, false, payload)
 	if err != nil {
 		// 返回错误，由上层统一处理日志
 		return fmt.Errorf("发送下行消息失败: %w", err)
