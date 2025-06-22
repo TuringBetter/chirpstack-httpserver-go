@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -13,16 +14,85 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// // commandHandlerFunc 定义了处理上行命令的函数签名
-// type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
+// commandHandlerFunc 定义了处理上行命令的函数签名
+type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
 
-// // commandHandlers 是一个从命令码到其处理函数的映射（注册表）
-// var commandHandlers = map[byte]commandHandlerFunc{
-// 	0x06: handleTimeSync,
-// 	0x07: handleManualAlarm,
-// 	0x08: handleAccidentAlarm,
-// 	0x09: handleHeartbeat,
-// }
+// handleTimeSync 处理时间同步请求 (原 case 0x06)
+func handleTimeSync(h *Handler, devEUI string, data []byte) error {
+	log.Info().Str("devEUI", devEUI).Msg("处理延迟测量请求")
+
+	// 【1】 获取当前UTC
+	nowUTC := time.Now().UTC()
+
+	// 【2】 计算当天午夜UTC时间点
+	midnightUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
+
+	// 【3】 计算自午夜以来经过的毫秒数
+	durationSinceMidnight := nowUTC.Sub(midnightUTC)
+	msSinceMidnight := uint32(durationSinceMidnight.Milliseconds())
+
+	// 【4】 将毫秒数(uint32)序列化为4个字节 (Big Endian)
+	timeBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(timeBytes, msSinceMidnight)
+
+	// 【5】 构建最终的下行数据包：命令码 + 时间数据
+	payload := append([]byte{0x06}, timeBytes...)
+
+	// 【6】 日志
+	log.Info().
+		Str("devEUI", devEUI).
+		Time("nowUTC", nowUTC).
+		Uint32("msSinceMidnight", msSinceMidnight).
+		Hex("payload", payload). // 以十六进制格式记录最终的数据包
+		Msg("准备发送时间同步下行数据")
+
+	downlinkID, err := h.csClient.SendDownlink(devEUI, 1, false, payload)
+	if err != nil {
+		// 返回错误，由上层统一处理日志
+		return fmt.Errorf("发送下行消息失败: %w", err)
+	}
+
+	log.Info().Str("devEUI", devEUI).Str("downlinkID", downlinkID).Msg("已发送时间同步响应")
+	return nil
+}
+
+// handleManualAlarm 处理人工报警 (原 case 0x07)
+func handleManualAlarm(h *Handler, devEUI string, data []byte) error {
+	log.Info().Str("devEUI", devEUI).Msg("处理人工报警")
+	if err := h.statusClient.SendWarnInfo(devEUI, 1); err != nil {
+		return fmt.Errorf("转发人工报警到状态服务器失败: %w", err)
+	}
+	log.Info().Str("devEUI", devEUI).Msg("成功转发人工报警")
+	return nil
+}
+
+// handleAccidentAlarm 处理事故报警 (原 case 0x08)
+func handleAccidentAlarm(h *Handler, devEUI string, data []byte) error {
+	log.Info().Str("devEUI", devEUI).Msg("处理事故报警")
+	if err := h.statusClient.SendWarnInfo(devEUI, 2); err != nil {
+		return fmt.Errorf("转发事故报警到状态服务器失败: %w", err)
+	}
+	log.Info().Str("devEUI", devEUI).Msg("成功转发事故报警")
+	return nil
+}
+
+// handleHeartbeat 处理心跳 (原 case 0x09)
+func handleHeartbeat(h *Handler, devEUI string, data []byte) error {
+	log.Info().Str("devEUI", devEUI).Msg("处理心跳数据")
+	if err := h.statusClient.SendHeartbeat(devEUI); err != nil {
+		return fmt.Errorf("转发心跳到状态服务器失败: %w", err)
+	}
+	log.Info().Str("devEUI", devEUI).Msg("成功转发心跳")
+	return nil
+}
+
+// commandHandlers 是一个从命令码到其处理函数的映射（注册表）
+var commandHandlers = map[byte]commandHandlerFunc{
+	0x06: handleTimeSync,
+	0x07: handleManualAlarm,
+	0x08: handleAccidentAlarm,
+	0x09: handleHeartbeat,
+}
 
 // Handler 结构体持有所有依赖，如服务客户端
 type Handler struct {
@@ -89,64 +159,17 @@ func (h *Handler) handleChirpStackEvent(c *gin.Context) {
 	}
 
 	cmdCode := decodedData[0]
-	switch cmdCode {
-	case 0x06: // 延迟测量
-		log.Info().Str("devEUI", devEUI).Msg("处理延迟测量请求")
-
-		// 【1】 获取当前UTC
-		nowUTC := time.Now().UTC()
-
-		// 【2】 计算当天午夜UTC时间点
-		midnightUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
-
-		// 【3】 计算自午夜以来经过的毫秒数
-		durationSinceMidnight := nowUTC.Sub(midnightUTC)
-		msSinceMidnight := uint32(durationSinceMidnight.Milliseconds())
-
-		// 【4】 将毫秒数(uint32)序列化为4个字节 (Big Endian)
-		timeBytes := make([]byte, 4)
-		binary.BigEndian.PutUint32(timeBytes, msSinceMidnight)
-
-		// 【5】 构建最终的下行数据包：命令码 + 时间数据
-		payload := append([]byte{0x06}, timeBytes...)
-
-		// 【6】 日志
-		log.Info().
-			Str("devEUI", devEUI).
-			Time("nowUTC", nowUTC).
-			Uint32("msSinceMidnight", msSinceMidnight).
-			Hex("payload", payload). // 以十六进制格式记录最终的数据包
-			Msg("准备发送时间同步下行数据")
-
-		downlinkID, err := h.csClient.SendDownlink(devEUI, 1, false, payload)
-		if err != nil {
-			log.Error().Err(err).Str("devEUI", devEUI).Msg("发送延迟测量响应失败")
-			return
-		}
-		log.Info().Str("devEUI", devEUI).Str("downlinkID", downlinkID).Msg("已发送延迟测量响应")
-	case 0x07: // 人工报警
-		log.Info().Str("devEUI", devEUI).Msg("处理人工报警")
-		if err := h.statusClient.SendWarnInfo(devEUI, 1); err != nil {
-			log.Error().Err(err).Str("devEUI", devEUI).Msg("转发人工报警失败")
-			return
-		}
-		log.Info().Str("devEUI", devEUI).Msg("成功转发人工报警")
-	case 0x08: // 事故报警
-		log.Info().Str("devEUI", devEUI).Msg("处理事故报警")
-		if err := h.statusClient.SendWarnInfo(devEUI, 2); err != nil {
-			log.Error().Err(err).Str("devEUI", devEUI).Msg("转发事故报警失败")
-			return
-		}
-		log.Info().Str("devEUI", devEUI).Msg("成功转发事故报警")
-	case 0x09: // 心跳
-		log.Info().Str("devEUI", devEUI).Msg("处理心跳数据")
-		if err := h.statusClient.SendHeartbeat(devEUI); err != nil {
-			log.Error().Err(err).Str("devEUI", devEUI).Msg("转发心跳失败")
-			return
-		}
-		log.Info().Str("devEUI", devEUI).Msg("成功转发心跳")
-	default:
+	handlerFunc, found := commandHandlers[cmdCode]
+	if !found {
 		log.Warn().Int("cmdCode", int(cmdCode)).Str("devEUI", devEUI).Msg("未知的命令码")
+		c.Status(http.StatusOK)
+		return
+	}
+
+	// 3. 执行具体的处理器
+	if err := handlerFunc(h, devEUI, decodedData); err != nil {
+		// 处理器内部已经记录了详细错误，这里只记录分派层面的失败信息
+		log.Error().Err(err).Str("devEUI", devEUI).Int("cmdCode", int(cmdCode)).Msg("命令处理失败")
 	}
 	c.Status(http.StatusOK)
 }
