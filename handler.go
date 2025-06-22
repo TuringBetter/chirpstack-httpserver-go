@@ -2,14 +2,27 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"net/http"
 	"strings"
+	"time"
 
 	"chirpstack-httpserver/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
+
+// // commandHandlerFunc 定义了处理上行命令的函数签名
+// type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
+
+// // commandHandlers 是一个从命令码到其处理函数的映射（注册表）
+// var commandHandlers = map[byte]commandHandlerFunc{
+// 	0x06: handleTimeSync,
+// 	0x07: handleManualAlarm,
+// 	0x08: handleAccidentAlarm,
+// 	0x09: handleHeartbeat,
+// }
 
 // Handler 结构体持有所有依赖，如服务客户端
 type Handler struct {
@@ -79,7 +92,33 @@ func (h *Handler) handleChirpStackEvent(c *gin.Context) {
 	switch cmdCode {
 	case 0x06: // 延迟测量
 		log.Info().Str("devEUI", devEUI).Msg("处理延迟测量请求")
-		downlinkID, err := h.csClient.SendDownlink(devEUI, 1, false, []byte{0x06})
+
+		// 【1】 获取当前UTC
+		nowUTC := time.Now().UTC()
+
+		// 【2】 计算当天午夜UTC时间点
+		midnightUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
+
+		// 【3】 计算自午夜以来经过的毫秒数
+		durationSinceMidnight := nowUTC.Sub(midnightUTC)
+		msSinceMidnight := uint32(durationSinceMidnight.Milliseconds())
+
+		// 【4】 将毫秒数(uint32)序列化为4个字节 (Big Endian)
+		timeBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(timeBytes, msSinceMidnight)
+
+		// 【5】 构建最终的下行数据包：命令码 + 时间数据
+		payload := append([]byte{0x06}, timeBytes...)
+
+		// 【6】 日志
+		log.Info().
+			Str("devEUI", devEUI).
+			Time("nowUTC", nowUTC).
+			Uint32("msSinceMidnight", msSinceMidnight).
+			Hex("payload", payload). // 以十六进制格式记录最终的数据包
+			Msg("准备发送时间同步下行数据")
+
+		downlinkID, err := h.csClient.SendDownlink(devEUI, 1, false, payload)
 		if err != nil {
 			log.Error().Err(err).Str("devEUI", devEUI).Msg("发送延迟测量响应失败")
 			return
