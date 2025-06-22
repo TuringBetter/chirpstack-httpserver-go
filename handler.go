@@ -17,6 +17,14 @@ import (
 // commandHandlerFunc 定义了处理上行命令的函数签名
 type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
 
+// commandHandlers 是一个从命令码到其处理函数的映射（注册表）
+var commandHandlers = map[byte]commandHandlerFunc{
+	0x06: handleTimeSync,
+	0x07: handleManualAlarm,
+	0x08: handleAccidentAlarm,
+	0x09: handleHeartbeat,
+}
+
 // handleTimeSync 处理时间同步请求 (原 case 0x06)
 func handleTimeSync(h *Handler, devEUI string, data []byte) error {
 	log.Info().Str("devEUI", devEUI).Msg("处理延迟测量请求")
@@ -84,14 +92,6 @@ func handleHeartbeat(h *Handler, devEUI string, data []byte) error {
 	}
 	log.Info().Str("devEUI", devEUI).Msg("成功转发心跳")
 	return nil
-}
-
-// commandHandlers 是一个从命令码到其处理函数的映射（注册表）
-var commandHandlers = map[byte]commandHandlerFunc{
-	0x06: handleTimeSync,
-	0x07: handleManualAlarm,
-	0x08: handleAccidentAlarm,
-	0x09: handleHeartbeat,
 }
 
 // Handler 结构体持有所有依赖，如服务客户端
