@@ -29,14 +29,14 @@ var commandHandlers = map[byte]commandHandlerFunc{
 func handleTimeSync(h *Handler, devEUI string, data []byte) error {
 	log.Info().Str("devEUI", devEUI).Msg("处理延迟测量请求")
 
-	// 【1】 获取当前UTC
-	nowUTC := time.Now().UTC()
+	// 【1】 获取当前CTS
+	nowCST := time.Now().In(time.FixedZone("CST", 8*60*60))
 
-	// 【2】 计算当天午夜UTC时间点
-	midnightUTC := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
+	// 【2】 计算当天午夜CTS时间点
+	midnightCST := time.Date(nowCST.Year(), nowCST.Month(), nowCST.Day(), 0, 0, 0, 0, nowCST.Location())
 
 	// 【3】 计算自午夜以来经过的毫秒数
-	durationSinceMidnight := nowUTC.Sub(midnightUTC)
+	durationSinceMidnight := nowCST.Sub(midnightCST)
 	msSinceMidnight := uint32(durationSinceMidnight.Milliseconds())
 
 	// 【4】 将毫秒数(uint32)序列化为4个字节 (Big Endian)
@@ -49,7 +49,7 @@ func handleTimeSync(h *Handler, devEUI string, data []byte) error {
 	// 【6】 日志
 	log.Info().
 		Str("devEUI", devEUI).
-		Time("nowUTC", nowUTC).
+		Time("nowCTS", nowCST).
 		Uint32("msSinceMidnight", msSinceMidnight).
 		Hex("payload", payload). // 以十六进制格式记录最终的数据包
 		Msg("准备发送时间同步下行数据")
