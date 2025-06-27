@@ -16,6 +16,8 @@ go.work
 /go.sum
 /go.mod
 
+# Go test file
+
 # Dependency directories
 /vendor/
 
