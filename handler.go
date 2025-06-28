@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"chirpstack-httpserver/services"
@@ -174,25 +173,6 @@ func (h *Handler) handleChirpStackEvent(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// 统一的下行处理逻辑
-func (h *Handler) processDownlinkCommands(c *gin.Context, commands interface{}, processFunc func(cmd map[string]interface{}) error) {
-	var cmdList []map[string]interface{}
-	if err := c.ShouldBindJSON(&cmdList); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "无效的JSON格式或请求体不是数组"})
-		return
-	}
-
-	for _, cmd := range cmdList {
-		if err := processFunc(cmd); err != nil {
-			// 具体的错误已在 processFunc 中记录，这里直接返回
-			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
-			return
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Setting applied successfully."})
-}
-
 // handleSetColor 处理设置颜色请求
 func (h *Handler) handleSetColor(c *gin.Context) {
 	// log.Info().Msg("here")
@@ -202,18 +182,23 @@ func (h *Handler) handleSetColor(c *gin.Context) {
 		return
 	}
 
-	for _, cmd := range commands {
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			data := []byte{byte(cmd.Color)}
-			id, err := h.csClient.SendDownlink(devEUI, 11, false, data)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送颜色设置失败")
-				continue // 继续处理下一个
-			}
-			log.Info().Str("devEUI", devEUI).Int("color", cmd.Color).Str("downlinkID", id).Msg("颜色设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	cmd := commands[0]
+
+	// 取出控制命令参数
+	devEUI := cmd.StakeNo
+	data := []byte{byte(cmd.Color)}
+	id, err := h.csClient.SendDownlink(devEUI, 11, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送颜色设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to send downlink."})
+		return
+	}
+	log.Info().Str("devEUI", devEUI).Int("color", cmd.Color).Str("downlinkID", id).Msg("颜色设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Color setting applied successfully."})
 }
 
@@ -226,18 +211,21 @@ func (h *Handler) handleSetFrequency(c *gin.Context) {
 	}
 	freqMap := map[int]byte{30: 0x1E, 60: 0x3C, 120: 0x78}
 
-	for _, cmd := range commands {
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			data := []byte{freqMap[cmd.Frequency]}
-			id, err := h.csClient.SendDownlink(devEUI, 10, false, data)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送频率设置失败")
-				continue
-			}
-			log.Info().Str("devEUI", devEUI).Int("frequency", cmd.Frequency).Str("downlinkID", id).Msg("频率设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	cmd := commands[0]
+
+	// 取出控制命令参数
+	devEUI := cmd.StakeNo
+	data := []byte{freqMap[cmd.Frequency]}
+	id, err := h.csClient.SendDownlink(devEUI, 10, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送频率设置失败")
+	}
+	log.Info().Str("devEUI", devEUI).Int("frequency", cmd.Frequency).Str("downlinkID", id).Msg("频率设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Frequency setting applied successfully."})
 }
 
@@ -248,21 +236,23 @@ func (h *Handler) handleSetLevel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-
-	for _, cmd := range commands {
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			highByte := byte(cmd.Level >> 8 & 0xFF)
-			lowByte := byte(cmd.Level & 0xFF)
-			data := []byte{highByte, lowByte}
-			id, err := h.csClient.SendDownlink(devEUI, 13, false, data)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送亮度设置失败")
-				continue
-			}
-			log.Info().Str("devEUI", devEUI).Int("level", cmd.Level).Str("downlinkID", id).Msg("亮度设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	// 取出控制命令参数
+	cmd := commands[0]
+
+	devEUI := cmd.StakeNo
+	highByte := byte(cmd.Level >> 8 & 0xFF)
+	lowByte := byte(cmd.Level & 0xFF)
+	data := []byte{highByte, lowByte}
+	id, err := h.csClient.SendDownlink(devEUI, 13, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送亮度设置失败")
+	}
+	log.Info().Str("devEUI", devEUI).Int("level", cmd.Level).Str("downlinkID", id).Msg("亮度设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Level setting applied successfully."})
 }
 
@@ -274,18 +264,20 @@ func (h *Handler) handleSetManner(c *gin.Context) {
 		return
 	}
 
-	for _, cmd := range commands {
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			data := []byte{byte(cmd.Manner)}
-			id, err := h.csClient.SendDownlink(devEUI, 12, false, data)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送亮灯方式设置失败")
-				continue
-			}
-			log.Info().Str("devEUI", devEUI).Int("manner", cmd.Manner).Str("downlinkID", id).Msg("亮灯方式设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	// 取出控制命令参数
+	cmd := commands[0]
+	devEUI := cmd.StakeNo
+	data := []byte{byte(cmd.Manner)}
+	id, err := h.csClient.SendDownlink(devEUI, 12, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送亮灯方式设置失败")
+	}
+	log.Info().Str("devEUI", devEUI).Int("manner", cmd.Manner).Str("downlinkID", id).Msg("亮灯方式设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Manner setting applied successfully."})
 }
 
@@ -296,19 +288,20 @@ func (h *Handler) handleSetSwitch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-
-	for _, cmd := range commands {
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			data := []byte{byte(cmd.Switch)}
-			id, err := h.csClient.SendDownlink(devEUI, 14, false, data)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送开关设置失败")
-				continue
-			}
-			log.Info().Str("devEUI", devEUI).Int("switch", cmd.Switch).Str("downlinkID", id).Msg("开关设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	// 取出控制命令参数
+	cmd := commands[0]
+	devEUI := cmd.StakeNo
+	data := []byte{byte(cmd.Switch)}
+	id, err := h.csClient.SendDownlink(devEUI, 14, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送开关设置失败")
+	}
+	log.Info().Str("devEUI", devEUI).Int("switch", cmd.Switch).Str("downlinkID", id).Msg("开关设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Switch setting applied successfully."})
 }
 
@@ -321,24 +314,26 @@ func (h *Handler) handleOverallSetting(c *gin.Context) {
 	}
 	freqMap := map[int]byte{30: 0x1E, 60: 0x3C, 120: 0x78}
 
-	for _, cmd := range commands {
-		payload := []byte{
-			byte(cmd.Color),
-			freqMap[cmd.Frequency],
-			byte(cmd.Level >> 8 & 0xFF),
-			byte(cmd.Level & 0xFF),
-			byte(cmd.Manner),
-		}
-
-		devEUIs := strings.Split(cmd.StakeNo, ",")
-		for _, devEUI := range devEUIs {
-			id, err := h.csClient.SendDownlink(devEUI, 15, false, payload)
-			if err != nil {
-				log.Error().Err(err).Str("devEUI", devEUI).Msg("发送整体设置失败")
-				continue
-			}
-			log.Info().Str("devEUI", devEUI).Str("downlinkID", id).Msg("整体设置下行已发送")
-		}
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
 	}
+	// 取出控制命令参数
+	cmd := commands[0]
+	devEUI := cmd.StakeNo
+	payload := []byte{
+		byte(cmd.Color),
+		freqMap[cmd.Frequency],
+		byte(cmd.Level >> 8 & 0xFF),
+		byte(cmd.Level & 0xFF),
+		byte(cmd.Manner),
+	}
+
+	id, err := h.csClient.SendDownlink(devEUI, 15, false, payload)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Msg("发送整体设置失败")
+	}
+	log.Info().Str("devEUI", devEUI).Str("downlinkID", id).Msg("整体设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Overall setting applied successfully."})
 }
