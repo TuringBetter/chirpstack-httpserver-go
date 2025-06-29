@@ -11,9 +11,10 @@ import (
 
 // ChirpStackClient 封装了与 ChirpStack 的交互
 type ChirpStackClient struct {
-	client    api.DeviceServiceClient
-	authToken []grpc.CallOption
-	config    config.Config
+	client          api.DeviceServiceClient
+	multicastClient api.MulticastGroupServiceClient
+	authToken       []grpc.CallOption
+	config          config.Config
 }
 
 // APIToken 实现了 gRPC 的 PerRPCCredentials 接口
@@ -41,10 +42,11 @@ func NewChirpStackClient(cfg config.Config) (*ChirpStackClient, error) {
 		return nil, err
 	}
 
-	client := api.NewDeviceServiceClient(conn)
+	// client := api.NewDeviceServiceClient(conn)
 	return &ChirpStackClient{
-		client: client,
-		config: cfg,
+		client:          api.NewDeviceServiceClient(conn),
+		multicastClient: api.NewMulticastGroupServiceClient(conn),
+		config:          cfg,
 	}, nil
 }
 
@@ -68,4 +70,24 @@ func (c *ChirpStackClient) SendDownlink(devEUI string, fPort uint32, confirmed b
 	}
 
 	return resp.Id, nil
+}
+
+// EnqueueMulticast 发送多播下行消息
+func (c *ChirpStackClient) EnqueueMulticast(multicastGroupID string, fPort uint32, data []byte) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.config.GRPCTimeout)
+	defer cancel()
+
+	req := &api.EnqueueMulticastGroupQueueItemRequest{
+		QueueItem: &api.MulticastGroupQueueItem{
+			MulticastGroupId: multicastGroupID,
+			FPort:            fPort,
+			Data:             data,
+		},
+	}
+	_, err := c.multicastClient.Enqueue(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	return "muticast enqueue succeed", nil
 }

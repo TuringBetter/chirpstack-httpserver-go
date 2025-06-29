@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"chirpstack-httpserver/config"
 	"chirpstack-httpserver/services"
 
 	"github.com/gin-gonic/gin"
@@ -97,13 +98,15 @@ func handleHeartbeat(h *Handler, devEUI string, data []byte) error {
 type Handler struct {
 	csClient     *services.ChirpStackClient
 	statusClient *services.StatusServerClient
+	config       config.Config
 }
 
 // NewHandler 创建一个新的 Handler
-func NewHandler(cs *services.ChirpStackClient, ss *services.StatusServerClient) *Handler {
+func NewHandler(cs *services.ChirpStackClient, ss *services.StatusServerClient, cfg config.Config) *Handler {
 	return &Handler{
 		csClient:     cs,
 		statusClient: ss,
+		config:       cfg,
 	}
 }
 
@@ -125,6 +128,18 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			lights.POST("/overall-setting", h.handleOverallSetting)
 		}
 	}
+
+	// 新增：多播 API
+	multicastGroup := apiGroup.Group("/multicast-groups")
+	{
+		multicastGroup.POST("/set-color", h.handleMulticastSetColor)
+		multicastGroup.POST("/set-frequency", h.handleMulticastSetFrequency)
+		multicastGroup.POST("/set-level", h.handleMulticastSetLevel)
+		multicastGroup.POST("/set-manner", h.handleSetManner)
+		multicastGroup.POST("/set-switch", h.handleSetSwitch)
+		multicastGroup.POST("/overall-setting", h.handleOverallSetting)
+	}
+
 }
 
 // handleChirpStackEvent 处理来自 ChirpStack 的上行数据
@@ -336,4 +351,183 @@ func (h *Handler) handleOverallSetting(c *gin.Context) {
 	}
 	log.Info().Str("devEUI", devEUI).Str("downlinkID", id).Msg("整体设置下行已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Overall setting applied successfully."})
+}
+
+// handleMulticastSetColor 处理多播组的颜色设置请求
+func (h *Handler) handleMulticastSetColor(c *gin.Context) {
+	var cmd MulticastSetColorCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	// 从映射中查找多播组 UUID
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	// 准备数据包并发送
+	data := []byte{byte(cmd.Color)}
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 11, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播颜色设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("color", cmd.Color).Str("downlinkID", id).Msg("多播颜色设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("color", cmd.Color).Msg("多播颜色设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast color setting enqueued successfully."})
+}
+
+// handleMulticastSetFrequency 处理多播组的频率设置请求
+func (h *Handler) handleMulticastSetFrequency(c *gin.Context) {
+	var cmd MulticastSetFrequencyCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	freqMap := map[int]byte{30: 0x1E, 60: 0x3C, 120: 0x78}
+	data := []byte{freqMap[cmd.Frequency]}
+
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 10, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播频率设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("frequency", cmd.Frequency).Str("downlinkID", id).Msg("多播频率设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("frequency", cmd.Frequency).Msg("多播频率设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast frequency setting enqueued successfully."})
+}
+
+// handleMulticastSetLevel 处理多播组的亮度设置请求
+func (h *Handler) handleMulticastSetLevel(c *gin.Context) {
+	var cmd MulticastSetLevelCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	highByte := byte(cmd.Level >> 8 & 0xFF)
+	lowByte := byte(cmd.Level & 0xFF)
+	data := []byte{highByte, lowByte}
+
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 13, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播亮度设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("level", cmd.Level).Str("downlinkID", id).Msg("多播亮度设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("level", cmd.Level).Msg("多播亮度设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
+}
+
+// handleMulticastSetManner 处理多播组的亮灯方式设置请求
+func (h *Handler) handleMulticastSetManner(c *gin.Context) {
+	var cmd MulticastSetMannerCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	data := []byte{byte(cmd.Manner)}
+
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 12, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播亮灯方式设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Manner", cmd.Manner).Str("downlinkID", id).Msg("多播亮度设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Manner", cmd.Manner).Msg("多播亮灯方式设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
+}
+
+// handleMulticastSetSwitch 处理多播组开关设置请求
+func (h *Handler) handleMulticastSetSwitch(c *gin.Context) {
+	var cmd MulticastSetSwitchCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	data := []byte{byte(cmd.Switch)}
+
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 14, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播开关设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Switch", cmd.Switch).Str("downlinkID", id).Msg("多播亮度设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Switch", cmd.Switch).Msg("多播开关设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
+}
+
+// handleMulticastSetOverall 处理多播组开关设置请求
+func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
+	var cmd MulticastOverallSettingCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	// data := []byte{byte(cmd.Switch)}
+	freqMap := map[int]byte{30: 0x1E, 60: 0x3C, 120: 0x78}
+	payload := []byte{
+		byte(cmd.Color),
+		freqMap[cmd.Frequency],
+		byte(cmd.Level >> 8 & 0xFF),
+		byte(cmd.Level & 0xFF),
+		byte(cmd.Manner),
+	}
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 15, payload)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播总体设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Str("downlinkID", id).Msg("多播亮度设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Msg("多播总体设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
 }

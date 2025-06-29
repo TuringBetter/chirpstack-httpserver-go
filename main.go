@@ -56,7 +56,7 @@ func main() {
 	router := gin.Default()
 
 	// 创建并注册路由
-	handler := NewHandler(csClient, statusClient)
+	handler := NewHandler(csClient, statusClient, cfg)
 	handler.RegisterRoutes(router)
 	log.Info().Msg("API 路由注册成功")
 

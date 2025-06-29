@@ -1,5 +1,7 @@
 package main
 
+// --- 单播 API 模型  ---
+
 // SetColorCommand 对应设置颜色的请求体
 type SetColorCommand struct {
 	StakeNo string `json:"stakeNo" binding:"required"`
@@ -45,4 +47,39 @@ type UplinkEvent struct {
 		DevEui string `json:"devEui"`
 	} `json:"deviceInfo"`
 	Data string `json:"data"`
+}
+
+// --- 新增：多播 API 模型 ---
+
+type MulticastSetColorCommand struct {
+	GroupID string `json:"groupId" binding:"required"`
+	Color   int    `json:"color" binding:"oneof=0 1"`
+}
+
+type MulticastSetFrequencyCommand struct {
+	GroupID   string `json:"groupId" binding:"required"`
+	Frequency int    `json:"frequency" binding:"required,oneof=30 60 120"`
+}
+
+type MulticastSetLevelCommand struct {
+	GroupID string `json:"groupId" binding:"required"`
+	Level   int    `json:"level" binding:"required,oneof=500 1000 2000 4000 7000"`
+}
+
+type MulticastSetMannerCommand struct {
+	GroupID string `json:"groupId" binding:"required"`
+	Manner  int    `json:"manner" binding:"oneof=0 1"`
+}
+
+type MulticastSetSwitchCommand struct {
+	GroupID string `json:"groupId" binding:"required"`
+	Switch  int    `json:"switch" binding:"oneof=0 1"`
+}
+
+type MulticastOverallSettingCommand struct {
+	GroupID   string `json:"groupId" binding:"required"`
+	Color     int    `json:"color" binding:"oneof=0 1"`
+	Frequency int    `json:"frequency" binding:"required,oneof=30 60 120"`
+	Level     int    `json:"level" binding:"required,oneof=500 1000 2000 4000 7000"`
+	Manner    int    `json:"manner" binding:"oneof=0 1"`
 }

@@ -10,6 +10,7 @@ type Config struct {
 	ListenAddress    string
 	GRPCTimeout      time.Duration
 	HTTPTimeout      time.Duration
+	MulticastGroups  map[string]string
 }
 
 // LoadConfig 加载并返回配置
@@ -21,5 +22,9 @@ func LoadConfig() Config {
 		ListenAddress:    "0.0.0.0:10088",
 		GRPCTimeout:      5 * time.Second,
 		HTTPTimeout:      5 * time.Second,
+		MulticastGroups: map[string]string{
+			"group1": "e81cd77b-f1e9-40fc-87ba-10e1fc935596",
+			// "group2": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", // 在此添加更多组
+		},
 	}
 }

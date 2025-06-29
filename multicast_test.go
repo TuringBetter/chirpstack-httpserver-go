@@ -59,8 +59,8 @@ func TestMultiCast(t *testing.T) {
 	req := &api.EnqueueMulticastGroupQueueItemRequest{
 		QueueItem: &api.MulticastGroupQueueItem{
 			MulticastGroupId: multicastGroupID,
-			FPort:            10,
-			Data:             []byte{0x01, 0x02, 0x03},
+			FPort:            11,
+			Data:             []byte{0x00},
 		},
 	}
 	// 3 发送请求
