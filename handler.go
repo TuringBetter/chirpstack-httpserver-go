@@ -135,9 +135,9 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		multicastGroup.POST("/set-color", h.handleMulticastSetColor)
 		multicastGroup.POST("/set-frequency", h.handleMulticastSetFrequency)
 		multicastGroup.POST("/set-level", h.handleMulticastSetLevel)
-		multicastGroup.POST("/set-manner", h.handleSetManner)
-		multicastGroup.POST("/set-switch", h.handleSetSwitch)
-		multicastGroup.POST("/overall-setting", h.handleOverallSetting)
+		multicastGroup.POST("/set-manner", h.handleMulticastSetManner)
+		multicastGroup.POST("/set-switch", h.handleMulticastSetSwitch)
+		multicastGroup.POST("/overall-setting", h.handleMulticastSetOverall)
 	}
 
 }
