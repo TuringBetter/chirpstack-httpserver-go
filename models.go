@@ -83,3 +83,11 @@ type MulticastOverallSettingCommand struct {
 	Level     int    `json:"level" binding:"required,oneof=500 1000 2000 4000 7000"`
 	Manner    int    `json:"manner" binding:"oneof=0 1"`
 }
+
+// 新增，传递多播组参数给单个设备
+type SetMulticastGroupCommand struct {
+	StakeNo string `json:"stakeNo" binding:"required"`
+	DevAddr string `json:"devAddr" binding:"required,len=8"`
+	AppSKey string `json:"appSKey" binding:"required,len=32"`
+	NwkSKey string `json:"nwkSKey" binding:"required,len=32"`
+}

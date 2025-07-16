@@ -24,7 +24,7 @@ func LoadConfig() Config {
 		HTTPTimeout:      5 * time.Second,
 		MulticastGroups: map[string]string{
 			"group1": "e81cd77b-f1e9-40fc-87ba-10e1fc935596",
-			// "group2": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", // 在此添加更多组
+			"group2": "d696d6eb-24d1-412c-a504-7a57acb2195e",
 		},
 	}
 }

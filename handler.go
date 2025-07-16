@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"time"
@@ -126,6 +127,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			lights.POST("/set-manner", h.handleSetManner)
 			lights.POST("/set-switch", h.handleSetSwitch)
 			lights.POST("/overall-setting", h.handleOverallSetting)
+			lights.POST("/set-multicast-group", h.handleSetMulticastGroup)
 		}
 	}
 
@@ -530,4 +532,64 @@ func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Str("downlinkID", id).Msg("多播亮度设置已入队")
 	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Msg("多播总体设置已入队")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
+}
+
+// handleSetMulticastGroup 处理设置设备加入多播组的请求 (单播)
+func (h *Handler) handleSetMulticastGroup(c *gin.Context) {
+	var commands []SetMulticastGroupCommand
+	if err := c.ShouldBindJSON(&commands); err != nil {
+		log.Error().Err(err).Msg("解析设置多播组请求 JSON 失败")
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	// 只能处理一个命令
+	if len(commands) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
+		return
+	}
+	cmd := commands[0] // 取出第一个命令
+
+	devEUI := cmd.StakeNo // 使用 StakeNo 作为设备的 DevEUI
+
+	// 将十六进制字符串解码为字节数组
+	devAddrBytes, err := hex.DecodeString(cmd.DevAddr)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Str("devAddr", cmd.DevAddr).Msg("DevAddr 十六进制解码失败")
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid DevAddr format or length."})
+		return
+	}
+	appSKeyBytes, err := hex.DecodeString(cmd.AppSKey)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Str("appSKey", cmd.AppSKey).Msg("AppSKey 十六进制解码失败")
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid AppSKey format or length."})
+		return
+	}
+	nwkSKeyBytes, err := hex.DecodeString(cmd.NwkSKey)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Str("nwkSKey", cmd.NwkSKey).Msg("NwkSKey 十六进制解码失败")
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid NwkSKey format or length."})
+		return
+	}
+
+	// Payload 结构：[DevAddr (4字节)] + [AppSKey (16字节)] + [NwkSKey (16字节)]
+	// 总长度 = 4 + 16 + 16 = 36 字节
+	payload := make([]byte, len(devAddrBytes)+len(appSKeyBytes)+len(nwkSKeyBytes)) // 预分配 payload 空间
+	copy(payload[0:], devAddrBytes)
+	copy(payload[len(devAddrBytes):], appSKeyBytes)
+	copy(payload[len(devAddrBytes)+len(appSKeyBytes):], nwkSKeyBytes)
+
+	id, err := h.csClient.SendDownlink(devEUI, 16, false, payload) // 使用 SendDownlink 进行单播
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", devEUI).Hex("payload", payload).Msg("发送设置多播组下行消息失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to send downlink."})
+		return
+	}
+
+	log.Info().
+		Str("devEUI", devEUI).
+		Str("downlinkID", id).
+		Str("devAddr", cmd.DevAddr).
+		Msg("设置多播组下行消息已发送")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast group setting applied successfully."})
 }
