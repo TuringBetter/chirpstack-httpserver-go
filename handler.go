@@ -129,6 +129,8 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 			lights.POST("/overall-setting", h.handleOverallSetting)
 			lights.POST("/set-multicast-group", h.handleSetMulticastGroup)
 		}
+		// 注册加速度检测开关接口
+		apiGroup.POST("/device/set-acceleration-mode", h.handleSetAccelerationMode)
 	}
 
 	// 新增：多播 API
@@ -585,4 +587,30 @@ func (h *Handler) handleSetMulticastGroup(c *gin.Context) {
 		Str("devAddr", cmd.DevAddr).
 		Msg("设置多播组下行消息已发送")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast group setting applied successfully."})
+}
+
+// handleSetAccelerationMode 处理加速度检测开关请求
+func (h *Handler) handleSetAccelerationMode(c *gin.Context) {
+	var cmd SetAccelerationModeCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		return
+	}
+	if cmd.DevEUI == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "devEUI cannot be empty！"})
+		return
+	}
+	if cmd.Enable != 0 && cmd.Enable != 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "enable can only be 0 or 1"})
+		return
+	}
+	data := []byte{byte(cmd.Enable)}
+	id, err := h.csClient.SendDownlink(cmd.DevEUI, 17, false, data)
+	if err != nil {
+		log.Error().Err(err).Str("devEUI", cmd.DevEUI).Msg("The command to send the acceleration detection switch failed")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to send downlink."})
+		return
+	}
+	log.Info().Str("devEUI", cmd.DevEUI).Int("enable", cmd.Enable).Str("downlinkID", id).Msg("The acceleration detection switch command has been sent")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "instruction send"})
 }

@@ -91,3 +91,11 @@ type SetMulticastGroupCommand struct {
 	AppSKey string `json:"appSKey" binding:"required,len=32"`
 	NwkSKey string `json:"nwkSKey" binding:"required,len=32"`
 }
+
+// 设置加速度检测模式的请求体
+// devEUI: 设备唯一标识，enable: 1=打开，0=关闭
+// 用于POST /api/device/set-acceleration-mode
+type SetAccelerationModeCommand struct {
+	DevEUI string `json:"devEUI" binding:"required"`
+	Enable int    `json:"enable" binding:"oneof=0 1"`
+}
