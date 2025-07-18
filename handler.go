@@ -536,19 +536,12 @@ func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 
 // handleSetMulticastGroup 处理设置设备加入多播组的请求 (单播)
 func (h *Handler) handleSetMulticastGroup(c *gin.Context) {
-	var commands []SetMulticastGroupCommand
-	if err := c.ShouldBindJSON(&commands); err != nil {
+	var cmd SetMulticastGroupCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
 		log.Error().Err(err).Msg("解析设置多播组请求 JSON 失败")
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
 		return
 	}
-
-	// 只能处理一个命令
-	if len(commands) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Request body must contain at least one command."})
-		return
-	}
-	cmd := commands[0] // 取出第一个命令
 
 	devEUI := cmd.StakeNo // 使用 StakeNo 作为设备的 DevEUI
 
