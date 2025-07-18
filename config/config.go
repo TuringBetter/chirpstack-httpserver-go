@@ -1,30 +1,50 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/spf13/viper"
+)
 
 // Config 结构体用于存放所有应用配置
 type Config struct {
-	ChirpStackServer string
-	APIToken         string
-	StatusServerURL  string
-	ListenAddress    string
-	GRPCTimeout      time.Duration
-	HTTPTimeout      time.Duration
-	MulticastGroups  map[string]string
+	ChirpStackServer string            `mapstructure:"chirpstack_server"`
+	APIToken         string            `mapstructure:"api_token"`
+	StatusServerURL  string            `mapstructure:"status_server_url"`
+	ListenAddress    string            `mapstructure:"listen_address"`
+	GRPCTimeout      time.Duration     `mapstructure:"grpc_timeout"`
+	HTTPTimeout      time.Duration     `mapstructure:"http_timeout"`
+	MulticastGroups  map[string]string `mapstructure:"multicast_groups"`
 }
 
 // LoadConfig 加载并返回配置
 func LoadConfig() Config {
-	return Config{
-		ChirpStackServer: "49.232.192.237:18080",
-		APIToken:         "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjQyOTVmNTUxLTU5YzEtNGIwOS1iMmRhLTBkNjFmYTQ2YmI1NiIsInR5cCI6ImtleSJ9.cgiNxrWfEuPjgwHOQs6t_wrXzH0q7vC_NoN42Y68r4Q",
-		StatusServerURL:  "http://111.20.150.242:10088",
-		ListenAddress:    "0.0.0.0:10088",
-		GRPCTimeout:      5 * time.Second,
-		HTTPTimeout:      5 * time.Second,
-		MulticastGroups: map[string]string{
-			"group1": "e81cd77b-f1e9-40fc-87ba-10e1fc935596",
-			"group2": "d696d6eb-24d1-412c-a504-7a57acb2195e",
-		},
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath("./config")
+	viper.AddConfigPath(".")
+
+	// 设置默认值
+	viper.SetDefault("grpc_timeout", "5s")
+	viper.SetDefault("http_timeout", "5s")
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic("无法读取配置文件: " + err.Error())
 	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		panic("配置文件解析失败: " + err.Error())
+	}
+
+	// 处理超时时间（字符串转time.Duration）
+	if d, err := time.ParseDuration(viper.GetString("grpc_timeout")); err == nil {
+		cfg.GRPCTimeout = d
+	}
+	if d, err := time.ParseDuration(viper.GetString("http_timeout")); err == nil {
+		cfg.HTTPTimeout = d
+	}
+
+	return cfg
 }
