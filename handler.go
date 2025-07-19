@@ -20,6 +20,7 @@ type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
 
 // commandHandlers 是一个从命令码到其处理函数的映射（注册表）
 var commandHandlers = map[byte]commandHandlerFunc{
+	0x05: handleAccMonitor,
 	0x06: handleTimeSync,
 	0x07: handleManualAlarm,
 	0x08: handleAccidentAlarm,
@@ -82,6 +83,39 @@ func handleAccidentAlarm(h *Handler, devEUI string, data []byte) error {
 		return fmt.Errorf("转发事故报警到状态服务器失败: %w", err)
 	}
 	log.Info().Str("devEUI", devEUI).Msg("成功转发事故报警")
+	return nil
+}
+
+// handleAccMonitor 打印加速度数值
+func handleAccMonitor(h *Handler, devEUI string, data []byte) error {
+	/*
+		for i, b := range data {
+			log.Info().Int("index", i).Str("byte", fmt.Sprintf("%02x", b)).Msg("解码后的数据")
+		}
+	*/
+	if len(data) < 7 {
+		log.Error().Str("devEUI", devEUI).Msg("加速度数据长度不足")
+		return fmt.Errorf("加速度数据长度不足")
+	}
+	// 小端序解析
+	x := int16(data[1]) | int16(data[2])<<8
+	y := int16(data[3]) | int16(data[4])<<8
+	z := int16(data[5]) | int16(data[6])<<8
+
+	scale := 0.061 / 1000
+	accX := float64(x) * scale
+	accY := float64(y) * scale
+	accZ := float64(z) * scale
+
+	log.Info().
+		Str("devEUI", devEUI).
+		Int("acc_X", int(x)).
+		Int("acc_Y", int(y)).
+		Int("acc_Z", int(z)).
+		Float64("acc_X_g", accX).
+		Float64("acc_Y_g", accY).
+		Float64("acc_Z_g", accZ).
+		Msg("收到三维加速度数据")
 	return nil
 }
 
@@ -175,9 +209,16 @@ func (h *Handler) handleChirpStackEvent(c *gin.Context) {
 		log.Warn().Str("devEUI", devEUI).Msg("数据负载为空")
 		return
 	}
-
+	/*
+		for i, b := range decodedData {
+			log.Info().Int("index", i).Str("byte", fmt.Sprintf("%02x", b)).Msg("解码后的数据")
+		}
+	*/
 	cmdCode := decodedData[0]
 	handlerFunc, found := commandHandlers[cmdCode]
+
+	// log.Info().Int("cmdCode", int(cmdCode)).Msg("收到命令码")
+
 	if !found {
 		log.Warn().Int("cmdCode", int(cmdCode)).Str("devEUI", devEUI).Msg("未知的命令码")
 		c.Status(http.StatusOK)
