@@ -38,6 +38,7 @@ go.work
 # Debug files
 debug
 *.log
+httpserver.log*
 
 # OS generated files
 .DS_Store

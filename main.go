@@ -5,30 +5,35 @@ import (
 	"chirpstack-httpserver/services"
 	"os"
 
+	"time"
+
 	"github.com/gin-gonic/gin"
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
 
-	// 打开日志文件
-	logFile, err := os.OpenFile(
-		"log.txt",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-		0664,
+	// 日志轮转：每天零点轮转，文件名为 httpserver.log.2025-07-04，主日志为 httpserver.log
+	// location, err := time.LoadLocation("Asia/Shanghai")
+	// if err != nil {
+	// 	log.Fatal().Err(err).Msg("无法加载上海时区")
+	// }
+	rotator, err := rotatelogs.New(
+		"httpserver.log.%Y-%m-%d",
+		rotatelogs.WithLinkName("httpserver.log"), // 始终指向当前日志
+		rotatelogs.WithRotationTime(24*time.Hour), // 每天轮转
+		rotatelogs.WithClock(rotatelogs.Local),    // 本地时区
 	)
-
 	if err != nil {
-		log.Fatal().Err(err).Msg("无法打开日志文件")
+		log.Fatal().Err(err).Msg("无法创建日志轮转器")
 	}
-
-	defer logFile.Close()
 
 	// 初始化结构化日志库 Zerolog，输出到文件 同时保留控制台输出（可选）
 	consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr}
 	fileWriter := zerolog.ConsoleWriter{
-		Out:        logFile,
+		Out:        rotator,
 		NoColor:    true,
 		TimeFormat: "2006-01-02 15:04:05",
 	}

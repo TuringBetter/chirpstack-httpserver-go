@@ -1,6 +1,7 @@
 chirpstack_server: "49.232.192.237:18080"
 api_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjQyOTVmNTUxLTU5YzEtNGIwOS1iMmRhLTBkNjFmYTQ2YmI1NiIsInR5cCI6ImtleSJ9.cgiNxrWfEuPjgwHOQs6t_wrXzH0q7vC_NoN42Y68r4Q"
-status_server_url: "http://111.20.150.242:10088"
+# status_server_url: "http://111.20.150.242:10088"
+status_server_url: "http://172.16.105.58:10088 "
 listen_address: "0.0.0.0:10088"
 grpc_timeout: "5s"
 http_timeout: "5s"
