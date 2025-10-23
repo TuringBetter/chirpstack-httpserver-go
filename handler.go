@@ -20,11 +20,18 @@ type commandHandlerFunc func(h *Handler, devEUI string, data []byte) error
 
 // commandHandlers 是一个从命令码到其处理函数的映射（注册表）
 var commandHandlers = map[byte]commandHandlerFunc{
+	0x04: handleSkew,
 	0x05: handleAccMonitor,
 	0x06: handleTimeSync,
 	0x07: handleManualAlarm,
 	0x08: handleAccidentAlarm,
 	0x09: handleHeartbeat,
+}
+
+// handleSkew 处理偏移请求 (原 case 0x04)
+func handleSkew(h *Handler, devEUI string, data []byte) error {
+	log.Info().Str("devEUI", devEUI).Msg("处理偏移请求")
+	return nil
 }
 
 // handleTimeSync 处理时间同步请求 (原 case 0x06)
