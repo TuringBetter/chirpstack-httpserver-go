@@ -176,6 +176,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		multicastGroup.POST("/set-manner", h.handleMulticastSetManner)
 		multicastGroup.POST("/set-switch", h.handleMulticastSetSwitch)
 		multicastGroup.POST("/overall-setting", h.handleMulticastSetOverall)
+		multicastGroup.POST("/set-character", h.handleMulticastSetCharacter)
 	}
 
 }
@@ -542,7 +543,35 @@ func (h *Handler) handleMulticastSetSwitch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
 }
 
-// handleMulticastSetOverall 处理多播组开关设置请求
+// handleMulticastSetCharacter 处理多播组的字符设置请求
+func (h *Handler) handleMulticastSetCharacter(c *gin.Context) {
+	var cmd MulticastCharacterCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	data := []byte{byte(cmd.Switch)}
+
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 18, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播字符设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Switch", cmd.Switch).Str("downlinkID", id).Msg("多播亮度设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Switch", cmd.Switch).Msg("多播字符设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast character setting enqueued successfully."})
+}
+
+// handleMulticastSetOverall 处理多播组总体设置请求
 func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 	var cmd MulticastOverallSettingCommand
 	if err := c.ShouldBindJSON(&cmd); err != nil {
