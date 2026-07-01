@@ -184,6 +184,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		multicastGroup.POST("/set-switch", h.handleMulticastSetSwitch)
 		multicastGroup.POST("/overall-setting", h.handleMulticastSetOverall)
 		multicastGroup.POST("/set-character", h.handleMulticastSetCharacter)
+		multicastGroup.POST("/set-brightness", h.handleMulticastSetBrightness)
 	}
 
 }
@@ -578,6 +579,31 @@ func (h *Handler) handleMulticastSetCharacter(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast character setting enqueued successfully."})
 }
 
+
+// handleMulticastSetBrightness 处理多播组的亮度设置请求
+func (h *Handler) handleMulticastSetBrightness(c *gin.Context) {
+	var cmd MulticastSetBrightnessCommand
+	if err := c.ShouldBindJSON(&cmd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Invalid request: " + err.Error()})
+		return
+	}
+	multicastGroupID, found := h.config.MulticastGroups[cmd.GroupID]
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "Unknown groupId: " + cmd.GroupID})
+		return
+	}
+
+	data := []byte{byte(cmd.Brightness)}
+	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 19, data)
+	if err != nil {
+		log.Error().Err(err).Str("multicastGroupID", multicastGroupID).Msg("发送多播亮度设置失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to enqueue multicast downlink."})
+		return
+	}
+
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Brightness", cmd.Brightness).Msg("多播亮度设置已入队")
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast brightness setting enqueued successfully."})
+}
 // handleMulticastSetOverall 处理多播组总体设置请求
 func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 	var cmd MulticastOverallSettingCommand

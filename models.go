@@ -80,6 +80,12 @@ type MulticastCharacterCommand struct {
 	GroupID string `json:"groupId" binding:"required"`
 	Switch  int    `json:"switch" binding:"oneof=0 1"`
 }
+
+type MulticastSetBrightnessCommand struct {
+	GroupID    string `json:"groupId" binding:"required"`
+	Brightness int    `json:"brightness" binding:"gte=0,lte=255"`
+}
+
 type MulticastOverallSettingCommand struct {
 	GroupID   string `json:"groupId" binding:"required"`
 	Color     int    `json:"color" binding:"oneof=0 1"`
