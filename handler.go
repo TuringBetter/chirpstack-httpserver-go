@@ -397,6 +397,7 @@ func (h *Handler) handleOverallSetting(c *gin.Context) {
 		byte(cmd.Level >> 8 & 0xFF),
 		byte(cmd.Level & 0xFF),
 		byte(cmd.Manner),
+		byte(cmd.RadarEnable),
 	}
 
 	id, err := h.csClient.SendDownlink(devEUI, 15, false, payload)
@@ -579,7 +580,6 @@ func (h *Handler) handleMulticastSetCharacter(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast character setting enqueued successfully."})
 }
 
-
 // handleMulticastSetBrightness 处理多播组的亮度设置请求
 func (h *Handler) handleMulticastSetBrightness(c *gin.Context) {
 	var cmd MulticastSetBrightnessCommand
@@ -604,6 +604,7 @@ func (h *Handler) handleMulticastSetBrightness(c *gin.Context) {
 	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Brightness", cmd.Brightness).Msg("多播亮度设置已入队")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast brightness setting enqueued successfully."})
 }
+
 // handleMulticastSetOverall 处理多播组总体设置请求
 func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 	var cmd MulticastOverallSettingCommand
@@ -626,6 +627,7 @@ func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 		byte(cmd.Level >> 8 & 0xFF),
 		byte(cmd.Level & 0xFF),
 		byte(cmd.Manner),
+		byte(cmd.RadarEnable),
 	}
 	_, err := h.csClient.EnqueueMulticast(multicastGroupID, 15, payload)
 	if err != nil {

@@ -34,11 +34,12 @@ type SetSwitchCommand struct {
 
 // OverallSettingCommand 对应整体设置的请求体
 type OverallSettingCommand struct {
-	StakeNo   string `json:"stakeNo" binding:"required"`
-	Color     int    `json:"color" binding:"oneof=0 1"`
-	Frequency int    `json:"frequency" binding:"oneof=30 60 120"`
-	Level     int    `json:"level" binding:"oneof=500 1000 2000 4000 7000"`
-	Manner    int    `json:"manner" binding:"oneof=0 1"`
+	StakeNo     string `json:"stakeNo" binding:"required"`
+	Color       int    `json:"color" binding:"oneof=0 1"`
+	Frequency   int    `json:"frequency" binding:"oneof=30 60 120"`
+	Level       int    `json:"level" binding:"oneof=500 1000 2000 4000 7000"`
+	Manner      int    `json:"manner" binding:"oneof=0 1"`
+	RadarEnable int    `json:"radarEnable" binding:"oneof=0 1"`
 }
 
 // UplinkEvent 对应 ChirpStack 上行事件的 JSON 结构
@@ -87,11 +88,12 @@ type MulticastSetBrightnessCommand struct {
 }
 
 type MulticastOverallSettingCommand struct {
-	GroupID   string `json:"groupId" binding:"required"`
-	Color     int    `json:"color" binding:"oneof=0 1"`
-	Frequency int    `json:"frequency" binding:"required,oneof=30 60 120"`
-	Level     int    `json:"level" binding:"required,oneof=500 1000 2000 4000 7000"`
-	Manner    int    `json:"manner" binding:"oneof=0 1"`
+	GroupID     string `json:"groupId" binding:"required"`
+	Color       int    `json:"color" binding:"oneof=0 1"`
+	Frequency   int    `json:"frequency" binding:"required,oneof=30 60 120"`
+	Level       int    `json:"level" binding:"required,oneof=500 1000 2000 4000 7000"`
+	Manner      int    `json:"manner" binding:"oneof=0 1"`
+	RadarEnable int    `json:"radarEnable" binding:"oneof=0 1"`
 }
 
 // 新增，传递多播组参数给单个设备
