@@ -637,7 +637,7 @@ func (h *Handler) handleMulticastSetOverall(c *gin.Context) {
 	}
 
 	// log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Str("downlinkID", id).Msg("多播亮度设置已入队")
-	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Msg("多播总体设置已入队")
+	log.Info().Str("groupId", cmd.GroupID).Str("multicastUUID", multicastGroupID).Int("Color", cmd.Color).Int("Frequency", cmd.Frequency).Int("Level", cmd.Level).Int("Manner", cmd.Manner).Int("RadarEnable", cmd.RadarEnable).Msg("多播总体设置已入队")
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Multicast level setting enqueued successfully."})
 }
 
